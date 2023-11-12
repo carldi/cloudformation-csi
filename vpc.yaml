@@ -1,4 +1,7 @@
-# 11/10 create 2 public subnets, 4 private subnets, 2 private & 2 public route tables, 1 NAT GW, 1 Internet GW
+# 11/10 create 2 public subnets, 6 private subnets, 3 private & 1 public route tables, 1 NAT GW, 1 Internet GW
+# 11/11 +3 SGs, 1 APP1 instance
+
+# to-do: instance private IP, instance termination protect, volume iops wrong, load balancer, COMM&DB SG, instances
 
 Parameters:
   EnvironmentName:
@@ -21,25 +24,44 @@ Parameters:
     Type: String
     Default: 10.192.11.0/24
 
-  PrivateSubnet1CIDR:
+  PrivateSubnetAPP1CIDR:
     Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
     Type: String
     Default: 10.192.20.0/24
 
-  PrivateSubnet2CIDR:
-    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+  PrivateSubnetAPP2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
     Type: String
     Default: 10.192.21.0/24
 
-  PrivateSubnet3CIDR:
+  PrivateSubnetDB1CIDR:
     Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
     Type: String
     Default: 10.192.30.0/24
 
-  PrivateSubnet4CIDR:
-    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+  PrivateSubnetDB2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
     Type: String
     Default: 10.192.31.0/24
+
+  PrivateSubnetCOMM1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.192.40.0/24
+
+  PrivateSubnetCOMM2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
+    Type: String
+    Default: 10.192.41.0/24
+
+  InstanceTypeAPP:
+    Type: String
+    Default: t3.small
+
+  AMI:
+    Type: String
+    Default: ami-005f8adf84f8c5057
+    #Microsoft Windows Server 2022 Full Locale English AMI provided by Amazon
 
   ProjectName:
     Type: String
@@ -94,12 +116,12 @@ Resources:
         - Key: Name
           Value: !Sub ${EnvironmentName} Public Subnet (AZ2)
 
-  PrivateSubnet1:
+  PrivateSubnetAPP1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [ 0, !GetAZs  '' ]
-      CidrBlock: !Ref PrivateSubnet1CIDR
+      CidrBlock: !Ref PrivateSubnetAPP1CIDR
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -109,12 +131,12 @@ Resources:
         - Key: Stage
           Value: Prod
 
-  PrivateSubnet2:
+  PrivateSubnetAPP2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [ 1, !GetAZs  '' ]
-      CidrBlock: !Ref PrivateSubnet2CIDR
+      CidrBlock: !Ref PrivateSubnetAPP2CIDR
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -124,12 +146,12 @@ Resources:
         - Key: Stage
           Value: Prod
 
-  PrivateSubnet3:
+  PrivateSubnetDB1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [ 0, !GetAZs  '' ]
-      CidrBlock: !Ref PrivateSubnet3CIDR
+      CidrBlock: !Ref PrivateSubnetDB1CIDR
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -139,16 +161,46 @@ Resources:
         - Key: Stage
           Value: Prod
 
-  PrivateSubnet4:
+  PrivateSubnetDB2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [ 1, !GetAZs  '' ]
-      CidrBlock: !Ref PrivateSubnet4CIDR
+      CidrBlock: !Ref PrivateSubnetDB2CIDR
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
           Value: DB Private Subnet2
+        - Key: Project
+          Value: !Sub ${EnvironmentName}
+        - Key: Stage
+          Value: Prod
+
+  PrivateSubnetCOMM1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnetCOMM1CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: COMM Private Subnet1
+        - Key: Project
+          Value: !Sub ${EnvironmentName}
+        - Key: Stage
+          Value: Prod
+
+  PrivateSubnetCOMM2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnetCOMM2CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: COMM Private Subnet2
         - Key: Project
           Value: !Sub ${EnvironmentName}
         - Key: Stage
@@ -195,59 +247,86 @@ Resources:
       SubnetId: !Ref PublicSubnet2
 
 
-  PrivateRouteTable1:
+  PrivateAPPRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName} Private Routes (AZ1)
+          Value: !Sub ${EnvironmentName} APP Routes
 
-  DefaultPrivateRoute1:
+  DefaultPrivateRouteAPP:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref PrivateRouteTable1
+      RouteTableId: !Ref PrivateAPPRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGateway1
 
-  PrivateRouteTable2:
+  PrivateDBRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName} Private Routes (AZ2)
+          Value: !Sub ${EnvironmentName} DB Routes
 
-  DefaultPrivateRoute2:
+  DefaultPrivateRouteDB:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref PrivateRouteTable2
+      RouteTableId: !Ref PrivateDBRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateCOMMRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} COMM Routes
+
+  DefaultPrivateRouteCOMM:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateCOMMRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGateway1
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable1
-      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateAPPRouteTable
+      SubnetId: !Ref PrivateSubnetAPP1
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable1
-      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateAPPRouteTable
+      SubnetId: !Ref PrivateSubnetAPP2
 
   PrivateSubnet3RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable2
-      SubnetId: !Ref PrivateSubnet3
+      RouteTableId: !Ref PrivateDBRouteTable
+      SubnetId: !Ref PrivateSubnetDB1
 
   PrivateSubnet4RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable2
-      SubnetId: !Ref PrivateSubnet4
+      RouteTableId: !Ref PrivateDBRouteTable
+      SubnetId: !Ref PrivateSubnetDB2
+
+  PrivateSubnet5RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateCOMMRouteTable
+      SubnetId: !Ref PrivateSubnetCOMM1
+
+  PrivateSubnet6RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateCOMMRouteTable
+      SubnetId: !Ref PrivateSubnetCOMM2
 
   NoIngressSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -255,6 +334,71 @@ Resources:
       GroupName: "no-ingress-sg"
       GroupDescription: "Security group with no ingress rule"
       VpcId: !Ref VPC
+
+  SecurityGroupAPP:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "APP SG"
+      GroupDescription: "SG For APP"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          CidrIp: !Ref VpcCIDR
+        - IpProtocol: tcp
+          FromPort: '443'
+          ToPort: '443'
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  SecurityGroupDB:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "DB SG"
+      GroupDescription: "SG For DB"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          CidrIp: !Ref VpcCIDR
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+    SecurityGroupCOMM:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "COMM SG"
+      GroupDescription: "SG For COMM"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          CidrIp: !Ref VpcCIDR
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  InstanceAPP1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AMI
+      InstanceType: !Ref InstanceTypeAPP
+      SubnetId: !Ref PrivateSubnetAPP1
+      SecurityGroupIds: 
+        - !Ref SecurityGroupAPP
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs: 
+            VolumeSize: 50
+        - DeviceName: xvdb
+          Ebs:
+            VolumeSize: 50
+            VolumeType: gp3
+            Iops: 2000
+            Encrypted: true
+            KmsKeyId: alias/aws/ebs
+            DeleteOnTermination: false
+
 
 Outputs:
   VPC:
@@ -267,7 +411,7 @@ Outputs:
 
   PrivateSubnets:
     Description: A list of the private subnets
-    Value: !Join [ ",", [ !Ref PrivateSubnet1, !Ref PrivateSubnet2, !Ref PrivateSubnet3, !Ref PrivateSubnet4 ]]
+    Value: !Join [ ",", [ !Ref PrivateSubnetAPP1, !Ref PrivateSubnetAPP2, !Ref PrivateSubnetDB1, !Ref PrivateSubnetDB2, !Ref PrivateSubnetCOMM2, !Ref PrivateSubnetCOMM2 ]]
 
   PublicSubnet1:
     Description: A reference to the public subnet in the 1st Availability Zone
@@ -277,21 +421,29 @@ Outputs:
     Description: A reference to the public subnet in the 2nd Availability Zone
     Value: !Ref PublicSubnet2
 
-  PrivateSubnet1:
+  PrivateSubnetAPP1:
     Description: A reference to the private subnet in the 1st Availability Zone
-    Value: !Ref PrivateSubnet1
+    Value: !Ref PrivateSubnetAPP1
 
-  PrivateSubnet2:
+  PrivateSubnetAPP2:
     Description: A reference to the private subnet in the 2nd Availability Zone
-    Value: !Ref PrivateSubnet2
+    Value: !Ref PrivateSubnetAPP2
 
-  PrivateSubnet3:
+  PrivateSubnetDB1:
     Description: A reference to the private subnet in the 2nd Availability Zone
-    Value: !Ref PrivateSubnet3
+    Value: !Ref PrivateSubnetDB1
 
-  PrivateSubnet4:
+  PrivateSubnetDB2:
     Description: A reference to the private subnet in the 2nd Availability Zone
-    Value: !Ref PrivateSubnet4
+    Value: !Ref PrivateSubnetDB2
+
+  PrivateSubnetCOMM1:
+    Description: A reference to the private subnet in the 2nd Availability Zone
+    Value: !Ref PrivateSubnetCOMM1
+
+  PrivateSubnetCOMM2:
+    Description: A reference to the private subnet in the 2nd Availability Zone
+    Value: !Ref PrivateSubnetCOMM2
 
   NoIngressSecurityGroup:
     Description: Security group with no ingress rule
