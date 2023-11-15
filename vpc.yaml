@@ -1,7 +1,8 @@
-# 11/10 create 2 public subnets, 6 private subnets, 3 private & 1 public route tables, 1 NAT GW, 1 Internet GW
+# 11/10 create 2 public subnets, 6 private subnets, 3 private & 1 public route tables, 1 NAT GW(Public1), 1 Internet GW
 # 11/11 +3 SGs, 1 APP1 instance
+# 11/13 + instance private IP parameters, default customer RDP source IP parameter, instance termination protect,
 
-# to-do: instance private IP, instance termination protect, volume iops wrong, load balancer, COMM&DB SG, instances
+# to-do:  volume iops wrong, load balancer, COMM&DB SG, instances
 
 Parameters:
   EnvironmentName:
@@ -57,15 +58,38 @@ Parameters:
   InstanceTypeAPP:
     Type: String
     Default: t3.small
+  
+  PrivateIpAPP1:
+    Type: String
+    Default: 10.192.20.10
+  
+  PrivateIpAPP2:
+    Type: String
+    Default: 10.192.21.10
+  
+  PrivateIpDB1:
+    Type: String
+    Default: 10.192.30.10
+
+  PrivateIpDB2:
+    Type: String
+    Default: 10.192.31.10
+
+  PrivateIpCOMM1:
+    Type: String
+    Default: 10.192.40.10
+
+  PrivateIpCOMM2:
+    Type: String
+    Default: 10.192.41.10
 
   AMI:
     Type: String
-    Default: ami-005f8adf84f8c5057
-    #Microsoft Windows Server 2022 Full Locale English AMI provided by Amazon
+    Default: ami-005f8adf84f8c5057  #Microsoft Windows Server 2022 Full Locale English AMI provided by Amazon
 
-  ProjectName:
+  RDPSourceIP:
     Type: String
-    Default: TestProject
+    Default: 10.1.5.15/32
 
 Resources:
   VPC:
@@ -76,6 +100,8 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
+          Value: !Sub ${EnvironmentName} VPC
+        - Key: Project
           Value: !Ref EnvironmentName
 
 
@@ -84,9 +110,9 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Ref EnvironmentName
+          Value: !Sub ${EnvironmentName} IG
         - Key: Project
-          Value: !Ref ProjectName
+          Value: !Ref EnvironmentName
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -104,6 +130,10 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName} Public Subnet (AZ1)
+        - Key: Project
+          Value: !Ref EnvironmentName
+        - Key: Stage
+          Value: Prod
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -115,6 +145,10 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName} Public Subnet (AZ2)
+        - Key: Project
+          Value: !Ref EnvironmentName
+        - Key: Stage
+          Value: Prod
 
   PrivateSubnetAPP1:
     Type: AWS::EC2::Subnet
@@ -125,9 +159,9 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: APP Private Subnet1
+          Value: !Sub ${EnvironmentName} APP Private Subnet1
         - Key: Project
-          Value: !Sub ${EnvironmentName}
+          Value: !Ref EnvironmentName
         - Key: Stage
           Value: Prod
 
@@ -140,9 +174,9 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: APP Private Subnet2
+          Value: !Sub ${EnvironmentName} APP Private Subnet2
         - Key: Project
-          Value: !Sub ${EnvironmentName}
+          Value: !Ref EnvironmentName
         - Key: Stage
           Value: Prod
 
@@ -155,9 +189,9 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: DB Private Subnet1
+          Value: !Sub ${EnvironmentName} DB Private Subnet1
         - Key: Project
-          Value: !Sub ${EnvironmentName}
+          Value: !Ref EnvironmentName
         - Key: Stage
           Value: Prod
 
@@ -170,9 +204,9 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: DB Private Subnet2
+          Value: !Sub ${EnvironmentName} DB Private Subnet2
         - Key: Project
-          Value: !Sub ${EnvironmentName}
+          Value: !Ref EnvironmentName
         - Key: Stage
           Value: Prod
 
@@ -185,9 +219,9 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: COMM Private Subnet1
+          Value: !Sub ${EnvironmentName} COMM Private Subnet1
         - Key: Project
-          Value: !Sub ${EnvironmentName}
+          Value: !Ref EnvironmentName
         - Key: Stage
           Value: Prod
 
@@ -200,9 +234,9 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: COMM Private Subnet2
+          Value: !Sub ${EnvironmentName} COMM Private Subnet2
         - Key: Project
-          Value: !Sub ${EnvironmentName}
+          Value: !Ref EnvironmentName
         - Key: Stage
           Value: Prod
 
@@ -225,6 +259,10 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName} Public Routes
+        - Key: Project
+          Value: !Ref EnvironmentName
+        - Key: Stage
+          Value: Prod
 
   DefaultPublicRoute:
     Type: AWS::EC2::Route
@@ -254,6 +292,10 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName} APP Routes
+        - Key: Project
+          Value: !Ref EnvironmentName
+        - Key: Stage
+          Value: Prod
 
   DefaultPrivateRouteAPP:
     Type: AWS::EC2::Route
@@ -269,6 +311,10 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName} DB Routes
+        - Key: Project
+          Value: !Ref EnvironmentName
+        - Key: Stage
+          Value: Prod
 
   DefaultPrivateRouteDB:
     Type: AWS::EC2::Route
@@ -284,6 +330,10 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName} COMM Routes
+        - Key: Project
+          Value: !Ref EnvironmentName
+        - Key: Stage
+          Value: Prod
 
   DefaultPrivateRouteCOMM:
     Type: AWS::EC2::Route
@@ -348,9 +398,20 @@ Resources:
           FromPort: '443'
           ToPort: '443'
           CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '3389'
+          ToPort: '3389'
+          CidrIp: !Ref RDPSourceIP
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} APP SG
+        - Key: Project
+          Value: !Ref EnvironmentName
+        - Key: Stage
+          Value: Prod
 
   SecurityGroupDB:
     Type: AWS::EC2::SecurityGroup
@@ -361,11 +422,22 @@ Resources:
       SecurityGroupIngress:
         - IpProtocol: -1
           CidrIp: !Ref VpcCIDR
+        - IpProtocol: tcp
+          FromPort: '3389'
+          ToPort: '3389'
+          CidrIp: !Ref RDPSourceIP
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} DB SG
+        - Key: Project
+          Value: !Ref EnvironmentName
+        - Key: Stage
+          Value: Prod
 
-    SecurityGroupCOMM:
+  SecurityGroupCOMM:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: "COMM SG"
@@ -374,9 +446,20 @@ Resources:
       SecurityGroupIngress:
         - IpProtocol: -1
           CidrIp: !Ref VpcCIDR
+        - IpProtocol: tcp
+          FromPort: '3389'
+          ToPort: '3389'
+          CidrIp: !Ref RDPSourceIP
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} COMM SG
+        - Key: Project
+          Value: !Ref EnvironmentName
+        - Key: Stage
+          Value: Prod
 
   InstanceAPP1:
     Type: AWS::EC2::Instance
@@ -384,6 +467,7 @@ Resources:
       ImageId: !Ref AMI
       InstanceType: !Ref InstanceTypeAPP
       SubnetId: !Ref PrivateSubnetAPP1
+      DisableApiTermination: true
       SecurityGroupIds: 
         - !Ref SecurityGroupAPP
       BlockDeviceMappings:
@@ -398,6 +482,15 @@ Resources:
             Encrypted: true
             KmsKeyId: alias/aws/ebs
             DeleteOnTermination: false
+      PrivateIpAddress: !Ref PrivateIpAPP1
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} APP1
+        - Key: Project
+          Value: !Ref EnvironmentName
+        - Key: Stage
+          Value: Prod
+
 
 
 Outputs:
@@ -430,7 +523,7 @@ Outputs:
     Value: !Ref PrivateSubnetAPP2
 
   PrivateSubnetDB1:
-    Description: A reference to the private subnet in the 2nd Availability Zone
+    Description: A reference to the private subnet in the 1nd Availability Zone
     Value: !Ref PrivateSubnetDB1
 
   PrivateSubnetDB2:
@@ -438,13 +531,13 @@ Outputs:
     Value: !Ref PrivateSubnetDB2
 
   PrivateSubnetCOMM1:
-    Description: A reference to the private subnet in the 2nd Availability Zone
+    Description: A reference to the private subnet in the 1nd Availability Zone
     Value: !Ref PrivateSubnetCOMM1
 
   PrivateSubnetCOMM2:
     Description: A reference to the private subnet in the 2nd Availability Zone
     Value: !Ref PrivateSubnetCOMM2
 
-  NoIngressSecurityGroup:
-    Description: Security group with no ingress rule
-    Value: !Ref NoIngressSecurityGroup
+  #Instances:
+  #  Description: A list of the instances
+  #  Value: !Join [ ",", [ !Ref InstanceAPP1, !Ref InstanceAPP2, !Ref InstanceDB1, !Ref InstanceDB2, !Ref InstanceCOMM2, !Ref InstanceCOMM2 ]]
