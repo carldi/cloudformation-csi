@@ -1,7 +1,7 @@
 # 11/10 create 2 public subnets, 6 private subnets, 3 private & 1 public route tables, 1 NAT GW(Public1), 1 Internet GW
 # 11/11 +3 SGs, 1 APP1 instance
 # 11/13 + instance private IP parameters, default customer RDP source IP parameter, instance termination protect,
-
+# 11/15 + ALB SG, ALB, APP2 instance, certificate, ALB TG, ALB listener
 # to-do:  volume iops wrong, load balancer, COMM&DB SG, instances
 
 Parameters:
@@ -90,6 +90,10 @@ Parameters:
   RDPSourceIP:
     Type: String
     Default: 10.1.5.15/32
+
+  APPURL:
+    Type: String
+    Default: *.infoshare.cloud
 
 Resources:
   VPC:
@@ -461,6 +465,28 @@ Resources:
         - Key: Stage
           Value: Prod
 
+  SecurityGroupLBAPP:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "LB APP SG"
+      GroupDescription: "SG For LB APP"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '443'
+          ToPort: '443'
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} LB APP SG
+        - Key: Project
+          Value: !Ref EnvironmentName
+        - Key: Stage
+          Value: Prod
+
   InstanceAPP1:
     Type: AWS::EC2::Instance
     Properties:
@@ -491,7 +517,93 @@ Resources:
         - Key: Stage
           Value: Prod
 
+  InstanceAPP2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AMI
+      InstanceType: !Ref InstanceTypeAPP
+      SubnetId: !Ref PrivateSubnetAPP2
+      DisableApiTermination: true
+      SecurityGroupIds: 
+        - !Ref SecurityGroupAPP
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs: 
+            VolumeSize: 50
+        - DeviceName: xvdb
+          Ebs:
+            VolumeSize: 50
+            VolumeType: gp3
+            Iops: 2000
+            Encrypted: true
+            KmsKeyId: alias/aws/ebs
+            DeleteOnTermination: false
+      PrivateIpAddress: !Ref PrivateIpAPP2
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} APP2
+        - Key: Project
+          Value: !Ref EnvironmentName
+        - Key: Stage
+          Value: Prod
 
+  APPLBCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: infoshare.cloud
+      DomainValidationOptions:
+        - DomainName: infoshare.cloud
+          HostedZoneId: Z0350819F9BVL1CZ8HW4
+      SubjectAlternativeNames:
+        - !Ref APPURL
+      ValidationMethod: DNS
+
+  APPLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${EnvironmentName} APP ALB
+      Scheme: internet-facing
+      Subnets:
+        - !Ref PrivateSubnetAPP1
+        - !Ref PrivateSubnetAPP2
+      Type: application
+
+  APPLoadBalancerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${EnvironmentName} APP Target
+      Port: 443
+      Protocol: HTTPS
+      VpcId: !Ref VPC
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 443
+      HealthCheckProtocol: HTTPS
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 5
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: true
+      Targets:
+        - Id: !Ref PrivateIpAPP1
+          Port: 443
+        - Id: !Ref PrivateIpAPP2
+          Port: 443
+      TargetType: ip
+      
+  APPLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn: APPLBCertificate
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref APPLoadBalancerTargetGroup
+      LoadBalancerArn: !Ref APPLoadBalancer
+      Port: '443'
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-TLS-1-2-Ext-2018-06
+      Certificates:
+        - CertificateArn: !Ref APPLBCertificate
 
 Outputs:
   VPC:
