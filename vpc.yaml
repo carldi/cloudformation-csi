@@ -2,7 +2,7 @@
 # 11/11 +3 SGs, 1 APP1 instance
 # 11/13 + instance private IP parameters, default customer RDP source IP parameter, instance termination protect,
 # 11/21 + ALB SG, Public ALB, APP2 instance, certificate association, ALB TG, ALB listener, COMM&DB SG, 2 DB instances, 2 COMM instances
-# to-do:  volume iops wrong
+# to-do:  volume iops wrong, update output
 
 Parameters:
   EnvironmentName:
