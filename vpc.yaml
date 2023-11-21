@@ -1,8 +1,8 @@
 # 11/10 create 2 public subnets, 6 private subnets, 3 private & 1 public route tables, 1 NAT GW(Public1), 1 Internet GW
 # 11/11 +3 SGs, 1 APP1 instance
 # 11/13 + instance private IP parameters, default customer RDP source IP parameter, instance termination protect,
-# 11/15 + ALB SG, ALB, APP2 instance, certificate, ALB TG, ALB listener
-# to-do:  volume iops wrong, load balancer, COMM&DB SG, instances
+# 11/21 + ALB SG, Public ALB, APP2 instance, certificate association, ALB TG, ALB listener, COMM&DB SG, 2 DB instances, 2 COMM instances
+# to-do:  volume iops wrong
 
 Parameters:
   EnvironmentName:
@@ -56,6 +56,17 @@ Parameters:
     Default: 10.192.41.0/24
 
   InstanceTypeAPP:
+    Description: Please enter the APP instance type
+    Type: String
+    Default: t3.small
+
+  InstanceTypeDB:
+    Description: Please enter the DB instance type
+    Type: String
+    Default: t3.small
+
+  InstanceTypeCOMM:
+    Description: Please enter the COMM instance type
     Type: String
     Default: t3.small
   
@@ -84,16 +95,18 @@ Parameters:
     Default: 10.192.41.10
 
   AMI:
+    Description: Please enter the ami instances are going to run with #Default: Microsoft Windows Server 2022
     Type: String
-    Default: ami-005f8adf84f8c5057  #Microsoft Windows Server 2022 Full Locale English AMI provided by Amazon
+    Default: ami-005f8adf84f8c5057  #Microsoft Windows Server 2022 Full Local English AMI provided by Amazon
 
   RDPSourceIP:
     Type: String
     Default: 10.1.5.15/32
 
-  APPURL:
+  APPLBCertificateARN:
+    Description: Please enter the certificate ARN
     Type: String
-    Default: *.infoshare.cloud
+    Default: arn:aws:acm:us-east-1:233848365410:certificate/069fa732-0fce-47fd-90bc-6ed96ee5a93a
 
 Resources:
   VPC:
@@ -487,6 +500,53 @@ Resources:
         - Key: Stage
           Value: Prod
 
+  APPLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: InternetGateway
+    Properties:
+      Name: !Sub ${EnvironmentName}-APP-ALB
+      Scheme: internet-facing
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Type: application
+
+  APPLoadBalancerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${EnvironmentName}-APP-Target
+      Port: 443
+      Protocol: HTTPS
+      VpcId: !Ref VPC
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 443
+      HealthCheckProtocol: HTTPS
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 5
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: true
+      Targets:
+        - Id: !Ref PrivateIpAPP1
+          Port: 443
+        - Id: !Ref PrivateIpAPP2
+          Port: 443
+      TargetType: ip
+      
+  APPLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref APPLoadBalancerTargetGroup
+      LoadBalancerArn: !Ref APPLoadBalancer
+      Port: '443'
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-TLS-1-2-Ext-2018-06
+      Certificates:
+        - CertificateArn: !Ref APPLBCertificateARN
+
   InstanceAPP1:
     Type: AWS::EC2::Instance
     Properties:
@@ -547,63 +607,125 @@ Resources:
         - Key: Stage
           Value: Prod
 
-  APPLBCertificate:
-    Type: AWS::CertificateManager::Certificate
+  InstanceDB1:
+    Type: AWS::EC2::Instance
     Properties:
-      DomainName: infoshare.cloud
-      DomainValidationOptions:
-        - DomainName: infoshare.cloud
-          HostedZoneId: Z0350819F9BVL1CZ8HW4
-      SubjectAlternativeNames:
-        - !Ref APPURL
-      ValidationMethod: DNS
+      ImageId: !Ref AMI
+      InstanceType: !Ref InstanceTypeDB
+      SubnetId: !Ref PrivateSubnetDB1
+      DisableApiTermination: true
+      SecurityGroupIds: 
+        - !Ref SecurityGroupDB
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs: 
+            VolumeSize: 50
+        - DeviceName: xvdb
+          Ebs:
+            VolumeSize: 50
+            VolumeType: gp3
+            Iops: 2000
+            Encrypted: true
+            KmsKeyId: alias/aws/ebs
+            DeleteOnTermination: false
+      PrivateIpAddress: !Ref PrivateIpDB1
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} DB1
+        - Key: Project
+          Value: !Ref EnvironmentName
+        - Key: Stage
+          Value: Prod
 
-  APPLoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+  InstanceDB2:
+    Type: AWS::EC2::Instance
     Properties:
-      Name: !Sub ${EnvironmentName} APP ALB
-      Scheme: internet-facing
-      Subnets:
-        - !Ref PrivateSubnetAPP1
-        - !Ref PrivateSubnetAPP2
-      Type: application
+      ImageId: !Ref AMI
+      InstanceType: !Ref InstanceTypeDB
+      SubnetId: !Ref PrivateSubnetDB2
+      DisableApiTermination: true
+      SecurityGroupIds: 
+        - !Ref SecurityGroupDB
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs: 
+            VolumeSize: 50
+        - DeviceName: xvdb
+          Ebs:
+            VolumeSize: 50
+            VolumeType: gp3
+            Iops: 2000
+            Encrypted: true
+            KmsKeyId: alias/aws/ebs
+            DeleteOnTermination: false
+      PrivateIpAddress: !Ref PrivateIpDB2
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} DB2
+        - Key: Project
+          Value: !Ref EnvironmentName
+        - Key: Stage
+          Value: Prod
 
-  APPLoadBalancerTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  InstanceCOMM1:
+    Type: AWS::EC2::Instance
     Properties:
-      Name: !Sub ${EnvironmentName} APP Target
-      Port: 443
-      Protocol: HTTPS
-      VpcId: !Ref VPC
-      HealthCheckEnabled: true
-      HealthCheckIntervalSeconds: 10
-      HealthCheckPort: 443
-      HealthCheckProtocol: HTTPS
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 5
-      TargetGroupAttributes:
-        - Key: stickiness.enabled
-          Value: true
-      Targets:
-        - Id: !Ref PrivateIpAPP1
-          Port: 443
-        - Id: !Ref PrivateIpAPP2
-          Port: 443
-      TargetType: ip
-      
-  APPLoadBalancerListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    DependsOn: APPLBCertificate
+      ImageId: !Ref AMI
+      InstanceType: !Ref InstanceTypeCOMM
+      SubnetId: !Ref PrivateSubnetCOMM1
+      DisableApiTermination: true
+      SecurityGroupIds: 
+        - !Ref SecurityGroupCOMM
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs: 
+            VolumeSize: 50
+        - DeviceName: xvdb
+          Ebs:
+            VolumeSize: 50
+            VolumeType: gp3
+            Iops: 2000
+            Encrypted: true
+            KmsKeyId: alias/aws/ebs
+            DeleteOnTermination: false
+      PrivateIpAddress: !Ref PrivateIpCOMM1
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} COMM1
+        - Key: Project
+          Value: !Ref EnvironmentName
+        - Key: Stage
+          Value: Prod
+
+  InstanceCOMM2:
+    Type: AWS::EC2::Instance
     Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref APPLoadBalancerTargetGroup
-      LoadBalancerArn: !Ref APPLoadBalancer
-      Port: '443'
-      Protocol: HTTPS
-      SslPolicy: ELBSecurityPolicy-TLS-1-2-Ext-2018-06
-      Certificates:
-        - CertificateArn: !Ref APPLBCertificate
+      ImageId: !Ref AMI
+      InstanceType: !Ref InstanceTypeCOMM
+      SubnetId: !Ref PrivateSubnetCOMM2
+      DisableApiTermination: true
+      SecurityGroupIds: 
+        - !Ref SecurityGroupCOMM
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs: 
+            VolumeSize: 50
+        - DeviceName: xvdb
+          Ebs:
+            VolumeSize: 50
+            VolumeType: gp3
+            Iops: 2000
+            Encrypted: true
+            KmsKeyId: alias/aws/ebs
+            DeleteOnTermination: false
+      PrivateIpAddress: !Ref PrivateIpCOMM2
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} COMM2
+        - Key: Project
+          Value: !Ref EnvironmentName
+        - Key: Stage
+          Value: Prod
 
 Outputs:
   VPC:
