@@ -6,7 +6,8 @@ The vpc.yaml is for CSI AWS CAD/RMS deployment use.
 
 Next:
   1. Add TGW subnets
-  2. Add subnet route directory service -> TGW
-  3. Add attachment
-  4. Add directory service route
-  5. Add new VPC to on-prem firewall tunnel route
+  2. Add attachment
+  3. Add subnet route directory service -> TGW (AD)(new VPC)
+  4. Add directory service route (AD)(Directory VPN)
+  5. Add new VPC to on-prem firewall tunnel route (RDP)(on-prem)
+  6. Add route to RDGW (RDP)(new VPC)
