@@ -9,3 +9,4 @@ Next:
   2. Add subnet route directory service -> TGW
   3. Add attachment
   4. Add directory service route
+  5. Add new VPC to on-prem firewall tunnel route
