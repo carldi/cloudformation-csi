@@ -11,3 +11,5 @@ Next:
   4. Add directory service route (AD)(Directory VPN)
   5. Add new VPC to on-prem firewall tunnel route (RDP)(on-prem)
   6. Add route to RDGW (RDP)(new VPC)
+  7. Add Gateway Endpoint
+  8. Update the route table to direct s3 traffic to the gateway endpoint
